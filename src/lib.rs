@@ -483,4 +483,83 @@ mod tests {
         );
         assert_eq!(m2range.next(), None);
     }
+
+    /*
+    /* Idea for macro: */
+    // Given:
+    struct Book {
+        title: String,
+        author: String,
+        publisher: Option<String>,
+        rating: u8,
+        pages: u16,
+        summary: String,
+    }
+    #[derive(MultiIndexMap)]
+    #[multi_index_map(ty = Book)]
+    struct BookMap {
+        #[multi_index_map(key = "primary unordered unique")]
+        title: String,
+        #[multi_index_map(key = "unordered nonunique")]
+        author: String,
+        #[multi_index_map(key = "unordered nonunique")]
+        publisher: Option<String>,
+        #[multi_index_map(key = "ordered nonunique")]
+        rating: u8,
+        #[multi_index_map(key = "unordered unique")]
+        pages: u16,
+        #[multi_index_map(key = "unordered nonunique", with_fn = "rating_per_page")]
+        rating_per_page: f32,
+    }
+
+    fn rating_per_page(b: &Book) -> f32 {
+        b.rating as f32 / b.pages as f32
+    }
+
+    /* Generates the following methods:
+     *
+     * new() -> BookMap
+     * Internally, there are many maps:
+     * Map<PrimaryKey, (ExtraKeys, ExtraValues)>
+     * Map<ExtraKey0, PrimaryKey>
+     * Map<ExtraKey1, PrimaryKey>
+     * Map<ExtraKey2, PrimaryKey>
+     *
+     * In this case, it would look like:
+     * HashMap<
+           String /*title*/,
+           (
+               (String /*author*/, Option<String> /*publisher*/, u8, u16, f32),
+               (String /*summary*/,),
+           )
+       >
+     * HashMap<String /*author*/, Vec<String /*title*/>>
+     * HashMap<Option<String> /*publisher*/, Vec<String /*title*/>>
+     * BTreeMap<u8, Vec<String>>
+     * HashMap<u16, String>
+     * HashMap<f32, Vec<String>>
+     *
+     * insert(v: Book)
+     * Where v is automatically converted into keys:
+     * let rating_per_page = rating_per_page(&v)
+     * let title = v.title;
+     * let secondary_keys: Multi<_> = ...
+     * let extra_fields: (String,) = (v.summary,);
+     * self.primary_map.insert(title, (secondary_keys, extra_fields));
+     *
+     * get(pk: String) -> Option<&Book>
+     * Using title as the primary key
+     * get_by_title(title: String) -> Option<&Book>, alias to the above
+     * get_by_author(author: String) -> &[Book], uses a secondary key to get all the books from
+     * this author
+     * get_by_rating(author: String) -> &[Book], get all the books with this rating
+     *
+     * range_by_rating(1..2) -> Iterator<Item=&[Book]>, range available only on ordered keys, and
+     * since this one is nonunique, it returns a Vec<Vec<Book>>
+     *
+     * ...and similarly, specialized types of keys would provide its own methods
+     */
+    */
+
 }
+
